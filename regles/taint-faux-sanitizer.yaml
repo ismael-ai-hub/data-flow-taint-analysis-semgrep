@@ -1,0 +1,33 @@
+rules:
+  - id: c-untrusted-data-to-sql
+    languages:
+      - c
+    mode: taint
+    severity: ERROR
+
+    message: >
+      Une donnee non fiable peut atteindre une operation
+      d'execution SQL.
+
+    metadata:
+      category: security
+      cwe: "CWE-89"
+      technology:
+        - c
+
+    pattern-sources:
+      - pattern: read_user_input()
+        exact: true
+
+    pattern-propagators:
+      - pattern: snprintf($DST, ..., ..., $SRC)
+        from: $SRC
+        to: $DST
+
+    pattern-sinks:
+      - patterns:
+          - pattern: execute_sql($QUERY)
+          - focus-metavariable: $QUERY
+
+    pattern-sanitizers:
+      - pattern: remove_prefix(...)
