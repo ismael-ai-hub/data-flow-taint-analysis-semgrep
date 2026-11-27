@@ -1,6 +1,8 @@
 # Data Flow and Taint Analysis in C with Semgrep
 
-A reproducible educational security lab investigating how untrusted input reaches sensitive SQL operations. This repository combines **manual MAY-taint analysis**, **custom Semgrep rules**, **positive and negative test cases**, and an investigation of **missing findings**.
+[![Semgrep Security Lab CI](https://github.com/ismael-ai-hub/data-flow-taint-analysis-semgrep/actions/workflows/semgrep-ci.yml/badge.svg)](https://github.com/ismael-ai-hub/data-flow-taint-analysis-semgrep/actions/workflows/semgrep-ci.yml)
+
+An educational security lab investigating how untrusted input can reach sensitive SQL operations. This repository combines **manual MAY-taint analysis**, **custom Semgrep rules**, **positive and negative test cases**, and an investigation of **missing findings**.
 
 > **Scope:** The C programs are intentionally simplified analysis fixtures. `read_user_input`, `execute_sql`, and transformation functions are declared but not implemented. The tests demonstrate *static-analysis behavior*, not exploitation of a running database or proof of SQL injection.
 
@@ -8,8 +10,8 @@ A reproducible educational security lab investigating how untrusted input reache
 
 - Modeled the flow `read_user_input() → input → snprintf() → query → execute_sql()` using abstract states `IN` and `OUT`.
 - Verified direct taint tracking, assignment propagation, conditional MAY flow, and rule-defined sanitizer behavior.
-- Isolated two missing findings: a buffer-writing `snprintf` propagator and a cross-function flow.
-- Demonstrated how marking an unsafe transformation as a sanitizer **suppresses an alert without changing the C program**.
+- Investigated two unreported flows in the local OSS scan: buffer-writing through `snprintf` and data crossing a function boundary.
+- Demonstrated how treating a transformation without a verified security guarantee as a sanitizer **suppresses an alert without changing the C program**.
 
 ## Stack
 
@@ -19,6 +21,9 @@ C · Semgrep **1.186.0** (local **OSS** engine, as recorded in JSON reports) · 
 
 ```text
 .
+├── .github/
+│   └── workflows/
+│       └── semgrep-ci.yml      # CI rule validation and regression tests
 ├── programmes/                  # Seven C test fixtures
 │   ├── vulnerable.c
 │   ├── test-direct.c
@@ -35,6 +40,8 @@ C · Semgrep **1.186.0** (local **OSS** engine, as recorded in JSON reports) · 
 ├── docs/
 │   ├── experiments.md           # Test matrix and evidence mapping
 │   └── limitations.md           # Interpretation and security caveats
+├── scripts/
+│   └── check_findings.py       # Six automated expected-finding tests
 ├── README.md
 └── .gitignore
 ```
@@ -77,7 +84,7 @@ See [experiment details](docs/experiments.md) and [interpretation limits](docs/l
 
 ## Reproduce locally
 
-Requires Python 3.12 (or another supported Python version) and Semgrep. From the repository root, using a Linux environment or compatible container:
+Requires Python 3.12 and Semgrep 1.186.0 (the versions tested for this project). From the repository root, using a Linux environment or compatible container:
 
 ```bash
 python3 -m venv .venv-semgrep
@@ -100,6 +107,12 @@ semgrep scan --config regles/taint-rule.yaml programmes/test-sanitizer.c
 semgrep scan --config regles/taint-sanitizer.yaml programmes/test-sanitizer.c
 ```
 
+Run the six regression checks locally:
+
+```bash
+python scripts/check_findings.py
+```
+
 For JSON output:
 
 ```bash
@@ -107,6 +120,27 @@ semgrep scan --config regles/taint-rule.yaml --json programmes/test-direct.c
 ```
 
 **Note:** All three YAML files deliberately reuse the same rule ID because they are alternative configurations of one experiment. Do not load all three together as a single ruleset; select the relevant YAML per test. The original Docker image used during the lab is not supplied in this repository, and a dedicated Dockerfile is future work.
+
+## Continuous Integration — GitHub Actions
+
+This project uses GitHub Actions to automatically validate custom Semgrep rules and execute security regression tests.
+
+The CI pipeline performs the following checks:
+
+- Installs Python 3.12 and Semgrep 1.186.0.
+- Validates all three custom Semgrep rule configurations.
+- Runs six automated taint-analysis regression tests.
+- Compares observed findings against expected results.
+- Fails the workflow if any regression test produces an unexpected result.
+
+The test suite includes direct taint flows, assignment propagation, conditional MAY analysis, and sanitizer modeling.
+
+**Why this matters:** The pipeline checks the consistency of security detection rules across code changes. Passing tests demonstrate expected analyzer behavior; they do not guarantee that the analyzed programs are free of vulnerabilities.
+
+Workflow: [`.github/workflows/semgrep-ci.yml`](.github/workflows/semgrep-ci.yml)
+Regression test script: [`scripts/check_findings.py`](scripts/check_findings.py)
+
+The six assertions cover the known positive and sanitizer-modeling cases. The `snprintf` and interprocedural zero-finding observations are documented separately and are **not** treated as security passes.
 
 ## Lessons learned
 
@@ -118,11 +152,11 @@ semgrep scan --config regles/taint-rule.yaml --json programmes/test-direct.c
 
 ## Next improvements
 
-- Add automated, version-pinned regression checks for expected alert counts.
-- Provide a dedicated, reproducible container image and CI pipeline.
+- Add regression fixtures for the currently unreported `snprintf` and cross-function flows, with clearly stated engine expectations.
+- Provide a dedicated Dockerfile for reproducible local setup.
 - Explore supported buffer-writing propagator models and cross-function analysis.
 - Add defensive examples using parameterized SQL APIs.
 
 ## Disclaimer
 
-Defensive educational project. The rules and examples do not constitute a production-grade SQL injection detector, and the undeclared implementation details mean no exploitability claim is established.
+Defensive educational project. The rules and examples do not constitute a production-grade SQL injection detector, and the missing function implementations mean no exploitability claim is established.
