@@ -37,3 +37,6 @@ jobs:
 
       - name: Validate false sanitizer experiment
         run: semgrep --validate --config regles/taint-faux-sanitizer.yaml
+
+      - name: Run Semgrep regression tests
+        run: python scripts/check_findings.py  
